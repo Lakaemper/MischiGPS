@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="autostart_desc">Starts the MischiGPS altitude overlay when the S3XY app is opened. Only watches for S3XY coming to the foreground; reads no screen content.</string>
+</resources>

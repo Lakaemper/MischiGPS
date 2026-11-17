@@ -1,0 +1,19 @@
+# Gradle / build output
+.gradle/
+build/
+app/build/
+
+# Machine-specific (SDK path)
+local.properties
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Signing / misc
+*.jks
+*.keystore
+*.apk
+*.aab
+.DS_Store
