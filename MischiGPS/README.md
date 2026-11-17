@@ -5,7 +5,12 @@ A tiny Android overlay that shows the **GPS altitude in meters**, always on top 
 - Floating, always-on-top display (lower-left corner by default, works in landscape and portrait)
 - Drag it anywhere; the position is remembered
 - Touch it to reveal a small ✕ above it (hides after ~3 s) to close it
-- Altitude only, in whole meters (sea-level altitude on Android 14+, otherwise raw GPS height); shows `--- m` until there is a GPS fix
+- Altitude only, in whole meters; shows `--- m` until there is a GPS fix
+- **Barometer fusion:** GPS altitude (absolute but noisy, ±10–30 m) is combined with the phone's pressure sensor
+  (precise for changes, but drifts with the weather). A small Kalman filter (`AltitudeFilter.java`) weights each
+  GPS fix by its reported vertical accuracy, so the value is stable, reacts instantly to real climbs/descents and
+  ignores GPS outliers. Without a barometer it falls back to plain GPS altitude. GPS altitude is the sea-level
+  value on Android 14+, otherwise the raw GPS (ellipsoid) height.
 - Optional auto-start whenever the [S3XY](https://play.google.com/store/apps/details?id=com.enhauto.buttons) app comes to the foreground
 
 GPS is requested once per second. Plain Java, no dependencies.

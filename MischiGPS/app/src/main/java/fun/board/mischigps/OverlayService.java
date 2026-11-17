@@ -17,7 +17,12 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Build;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.os.IBinder;
+import android.util.Log;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -42,6 +47,8 @@ public class OverlayService extends Service implements LocationListener {
     private final Runnable hideClose = () -> setCloseVisible(false);
     private WindowManager.LayoutParams lp;
     private LocationManager lm;
+    private SensorManager sm;
+    private final AltitudeFilter filter = new AltitudeFilter();
     private SharedPreferences prefs;
 
     @Override public IBinder onBind(Intent i) { return null; }
@@ -133,6 +140,10 @@ public class OverlayService extends Service implements LocationListener {
         });
         wm.addView(tv, lp);
 
+        sm = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        Sensor baro = sm.getDefaultSensor(Sensor.TYPE_PRESSURE); // null on phones without a barometer
+        if (baro != null) sm.registerListener(pressureListener, baro, SensorManager.SENSOR_DELAY_NORMAL);
+
         lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         try {
             lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 0, this);
@@ -163,17 +174,36 @@ public class OverlayService extends Service implements LocationListener {
         }
     }
 
-    @Override
-    public void onLocationChanged(Location l) {
-        if (!l.hasAltitude()) { tv.setText("--- m"); return; }
-        double alt = l.getAltitude(); // ellipsoid height
-        if (Build.VERSION.SDK_INT >= 34 && l.hasMslAltitude()) alt = l.getMslAltitudeMeters(); // sea level
+    private void showAltitude() {
+        double alt = filter.altitude();
+        if (tv == null || Double.isNaN(alt)) return;
         tv.setText(String.format(Locale.US, "%.0f m", alt));
     }
 
     @Override
+    public void onLocationChanged(Location l) {
+        if (!l.hasAltitude()) return;
+        double alt = l.getAltitude(); // ellipsoid height
+        if (Build.VERSION.SDK_INT >= 34 && l.hasMslAltitude()) alt = l.getMslAltitudeMeters(); // sea level
+        double acc = l.hasVerticalAccuracy() ? l.getVerticalAccuracyMeters() : Double.NaN;
+        filter.onGps(alt, acc, android.os.SystemClock.elapsedRealtimeNanos());
+        Log.d("MischiGPS", String.format(Locale.US, "gps(msl)=%.1f ellipsoid=%.1f acc=%.1f fused=%.1f baro=%b",
+                alt, l.getAltitude(), acc, filter.altitude(), filter.usingBarometer()));
+        showAltitude();
+    }
+
+    private final SensorEventListener pressureListener = new SensorEventListener() {
+        @Override public void onSensorChanged(SensorEvent e) {
+            filter.onPressure(e.values[0]);
+            if (filter.usingBarometer()) showAltitude();
+        }
+        @Override public void onAccuracyChanged(Sensor s, int a) { }
+    };
+
+    @Override
     public void onDestroy() {
         handler.removeCallbacks(hideClose);
+        if (sm != null) sm.unregisterListener(pressureListener);
         if (lm != null) lm.removeUpdates(this);
         setCloseVisible(false);
         if (tv != null) { try { wm.removeView(tv); } catch (Exception ignored) {} tv = null; }
